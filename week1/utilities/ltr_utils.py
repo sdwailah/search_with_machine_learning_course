@@ -12,19 +12,18 @@ def create_rescore_ltr_query(user_query: str, query_obj, click_prior_query: str,
     ##### Step 4.e:
     query_obj["rescore"] = {
         "window_size": rescore_size,
-        "query":{
-            "rescore_query":{
-                "sltr":{
-                    "params":{
-                        "keywords":user_query,
+        "query": {
+            "rescore_query": {
+                "sltr": {
+                    "params": {
+                        "keywords": user_query,
                         "click_prior_query": click_prior_query
                     },
-                    "model":ltr_model_name,
-                    "store": ltr_store_name,
-                    "active_features": active_features
+                    "model": ltr_model_name,
+                    "store": ltr_store_name
                 }
             },
-            "score_mode":"total",
+            "score_mode": "total",
             "rescore_query_weight": rescore_query_weight,
             "query_weight": main_query_weight
         }

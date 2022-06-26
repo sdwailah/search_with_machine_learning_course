@@ -243,8 +243,6 @@ class DataPrepper:
         except:
             print("Can not get logs")
 
-
-
         feature_results = {}
         feature_results["doc_id"] = []  # capture the doc id so we can join later
         feature_results["query_id"] = []  # ^^^
