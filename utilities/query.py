@@ -186,8 +186,11 @@ def create_query(user_query, click_prior_query, filters, sort="_score", sortDir=
     return query_obj
 
 
-def search(client, user_query, index="bbuy_products"):
-    query_obj = create_query(user_query, click_prior_query=None, filters=None, source=["name", "shortDescription"])
+def search(client, user_query, index="bbuy_products", sort=None, sortDir="desc"):
+    #### W3: classify the query
+    #### W3: create filters and boosts
+    # Note: you may also want to modify the `create_query` method above
+    query_obj = create_query(user_query, click_prior_query=None, filters=None, sort=sort, sortDir=sortDir, source=["name", "shortDescription"])
     logging.info(query_obj)
     response = client.search(query_obj, index=index)
     if response and response['hits']['hits'] and len(response['hits']['hits']) > 0:
@@ -211,8 +214,7 @@ if __name__ == "__main__":
                          help='The OpenSearch admin.  If this is set, the program will prompt for password too. If not set, use default of admin/admin')
 
     args = parser.parse_args()
-    output_file = "output.txt"
-    featureset_file = "featureset.json"
+
     if len(vars(args)) == 0:
         parser.print_usage()
         exit()
