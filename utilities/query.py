@@ -11,11 +11,13 @@ from urllib.parse import urljoin
 import pandas as pd
 import fileinput
 import logging
-
+import fasttext
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logging.basicConfig(format='%(levelname)s:%(message)s')
+
+model = fasttext.load_model("../week3/query_classifier_100k_epoch_25.bin");
 
 # expects clicks and impressions to be in the row
 def create_prior_queries_from_group(
@@ -49,7 +51,40 @@ def create_prior_queries(doc_ids, doc_id_weights,
 
 
 # Hardcoded query here.  Better to use search templates or other query config.
-def create_query(user_query, click_prior_query, filters, sort="_score", sortDir="desc", size=10, source=None):
+def create_query(user_query, click_prior_query, filters, sort="_score", sortDir="desc", size=10, source=None, categories=None, is_boost=False):
+    query_filters = filters
+    category_boost = {}
+    if query_filters and category_boost and not is_boost:
+        category_filter = {
+            "terms":{
+                "categoryPathIds.keyword": categories
+            }
+        }
+    elif categories and not is_boost:
+        query_filters = [
+            {
+                "terms": {
+                    "categoryPathIds.keyword": categories
+                }
+            }
+        ]
+
+    should_clauses = [
+        {
+            "match":{
+                "name":{
+                    "query": user_query,
+                    "fuzziness" : "1",
+                    "prefix_length": 2,
+                    "boost": 0.01
+                }
+            }
+        }
+    ]
+
+    if category_boost:
+        should_clauses.append(category_boost)
+
     query_obj = {
         'size': size,
         "sort": [
@@ -112,7 +147,7 @@ def create_query(user_query, click_prior_query, filters, sort="_score", sortDir=
                             }
                         ],
                         "minimum_should_match": 1,
-                        "filter": filters  #
+                        "filter": query_filters  #
                     }
                 },
                 "boost_mode": "multiply",  # how _score and functions are combined
@@ -186,9 +221,24 @@ def create_query(user_query, click_prior_query, filters, sort="_score", sortDir=
     return query_obj
 
 
-def search(client, user_query, index="bbuy_products", sort="_score", sortDir="desc"):
+def search(client, user_query, index="bbuy_products", sort="_score", sortDir="desc", is_boost=False, category_threshold=0.3):
     #### W3: classify the query
+    candidate_count = 5
+    categories, probs = model.predict(user_query, k=candidate_count)
+    print(categories)
+    print(probs)
+
     #### W3: create filters and boosts
+    cat_len = len(categories)
+    filter = None
+    category_list = []
+    for i in range(0, cat_len):
+        if probs[i] > category_threshold:
+            curret_cat = categories[i].replace("__lable__", "")
+            category_list.append(curret_cat)
+        else:
+            break
+
     # Note: you may also want to modify the `create_query` method above
     query_obj = create_query(user_query, click_prior_query=None, filters=None, sort=sort, sortDir=sortDir, source=["name", "shortDescription"])
     logging.info(query_obj)
