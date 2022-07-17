@@ -12,12 +12,14 @@ import pandas as pd
 import fileinput
 import logging
 import fasttext
+from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logging.basicConfig(format='%(levelname)s:%(message)s')
 
-model = fasttext.load_model("../week3/query_classifier_100k_epoch_25.bin");
+model_fasttext = fasttext.load_model("../week3/query_classifier_100k_epoch_25.bin")
+model_transformer = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 
 # expects clicks and impressions to be in the row
 def create_prior_queries_from_group(
@@ -48,6 +50,21 @@ def create_prior_queries(doc_ids, doc_id_weights,
             except KeyError as ke:
                 pass  # nothing to do in this case, it just means we can't find priors for this doc
     return click_prior_query
+
+
+def create_vector_embedding_query(model_transformer, query, knn ):
+    embedd_query = model_transformer.encode([query])[0].tolist()
+    query = {
+        "query" : {
+        "knn":{
+            "embedding": {
+                "vector": embedd_query,
+                "knn": knn
+            }
+        }
+    }
+    }
+    return query
 
 
 # Hardcoded query here.  Better to use search templates or other query config.
@@ -221,10 +238,10 @@ def create_query(user_query, click_prior_query, filters, sort="_score", sortDir=
     return query_obj
 
 
-def search(client, user_query, index="bbuy_products", sort="_score", sortDir="desc", is_boost=False, category_threshold=0.3):
+def search(client, user_query, index="bbuy_products", sort="_score", sortDir="desc", is_boost=False, category_threshold=0.3, vector=False):
     #### W3: classify the query
     candidate_count = 5
-    categories, probs = model.predict(user_query, k=candidate_count)
+    categories, probs = model_fasttext.predict(user_query, k=candidate_count)
     print(categories)
     print(probs)
 
@@ -240,7 +257,10 @@ def search(client, user_query, index="bbuy_products", sort="_score", sortDir="de
             break
 
     # Note: you may also want to modify the `create_query` method above
-    query_obj = create_query(user_query, click_prior_query=None, filters=None, sort=sort, sortDir=sortDir, source=["name", "shortDescription"])
+    if vector:
+        query_obj = create_vector_embedding_query(model_transformer, user_query, 1)
+    else:
+        query_obj = create_query(user_query, click_prior_query=None, filters=None, sort=sort, sortDir=sortDir, source=["name", "shortDescription"])
     logging.info(query_obj)
     response = client.search(query_obj, index=index)
     if response and response['hits']['hits'] and len(response['hits']['hits']) > 0:
@@ -262,6 +282,7 @@ if __name__ == "__main__":
                          help='The OpenSearch port')
     general.add_argument('--user',
                          help='The OpenSearch admin.  If this is set, the program will prompt for password too. If not set, use default of admin/admin')
+    general.add_argument("-v", "--vector", type=bool, default=False, help="Use vector search")
 
     args = parser.parse_args()
 
